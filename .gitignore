@@ -4,3 +4,4 @@ football_venv/
 runs/
 */__pycache__/
 __pycache__/
+stubs/
