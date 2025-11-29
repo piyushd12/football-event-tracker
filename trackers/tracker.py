@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import supervision as sv
 import pickle
 import os
+import cv2
 
 class Tracker:
     def __init__(self,model_path):
@@ -9,7 +10,7 @@ class Tracker:
         self.tracker = sv.ByteTrack()
     
     def detect_frames(self,frames):
-        batch_size = 20
+        batch_size = 5
         detections = []
         for i in range(0,len(frames),batch_size):
             batch_detections = self.model.predict(frames[i:i+batch_size],conf=0.1)
@@ -26,8 +27,8 @@ class Tracker:
         detections = self.detect_frames(frames)
 
         tracks = {
-            "player" : [],
-            "referee" : [],
+            "players" : [],
+            "referees" : [],
             "ball" : []
         }
 
@@ -47,8 +48,8 @@ class Tracker:
             # Track objects
             detection_with_tracks = self.tracker.update_with_detections(supervision_detections)
 
-            tracks["player"].append({})
-            tracks["referee"].append({})
+            tracks["players"].append({})
+            tracks["referees"].append({})
             tracks["ball"].append({})
 
             for frame_detection in detection_with_tracks:
@@ -57,11 +58,10 @@ class Tracker:
                 track_id = frame_detection[4]
 
                 if cls_id == class_names_inv["player"]:
-                    tracks["player"][frame_num][track_id] = {"bbox" : bbox}
+                    tracks["players"][frame_num][track_id] = {"bbox" : bbox}
                 
                 if cls_id == class_names_inv["referee"]:
-                    tracks["referee"][frame_num][track_id] = {"bbox" : bbox}
-
+                    tracks["referees"][frame_num][track_id] = {"bbox" : bbox}
             for frame_detection in supervision_detections:
                 bbox = frame_detection[0].tolist()
                 cls_id = frame_detection[3]
@@ -76,3 +76,95 @@ class Tracker:
                 pickle.dump(tracks,f)
         return tracks
 
+    def draw_ellipse(self,frame,bbox,color,track_id=None):
+        x1,y1,x2,y2 = int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])
+
+        x_center = int((x1 + x2) / 2)
+        width = int(x2 - x1)            
+
+        cv2.ellipse(
+            img=frame,
+            center=(x_center,y2),
+            axes=(width,int(0.35*width)),
+            angle=0.0,
+            startAngle=-45,
+            endAngle=235, 
+            color=color,
+            thickness=2,
+            lineType=cv2.LINE_4
+        )
+        
+        rect_width, rect_height = 40, 20
+        x1_rect = int(x_center - rect_width // 2)
+        x2_rect = int(x_center + rect_width // 2)
+        y1_rect = int((y2 - rect_height//2) + 15)
+        y2_rect = int((y2 + rect_height//2) + 15)
+
+        if track_id is not None:
+            cv2.rectangle(
+                img=frame,
+                pt1=(x1_rect,y1_rect),
+                pt2=(x2_rect,y2_rect),
+                color=color,
+                thickness=cv2.FILLED
+            )
+
+            x1_text = x1_rect + 12
+            if track_id > 99:
+                x1_text -= 10
+            
+            cv2.putText(
+                img=frame,
+                text=f"{track_id}",
+                org=(x1_text,y1_rect + 15),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=0.6,
+                color=(0,0,0),
+                thickness=2
+            )
+        
+        return frame
+    
+    
+    # def draw_annotations(self,video_frames,tracks):
+    #     output_video_frames = []
+    #     for frame_num, frame in enumerate(video_frames):
+    #         frame = frame.copy()
+
+    #         player_dict = tracks["players"][frame_num]
+    #         referee_dict = tracks["referees"][frame_num]
+    #         ball_dict = tracks["ball"][frame_num]
+
+    #         # Darw players
+    #         for track_id, player in player_dict.items():
+    #             frame = self.draw_ellipse(frame,player["bbox"],(0,0,255),track_id)
+            
+    #         output_video_frames.append(frame)
+    #     return output_video_frames
+
+
+    def draw_annotations(self, video_frames, tracks, video_writer):
+        # output_video_frames = []
+        
+        for frame_num, frame in enumerate(video_frames):
+            frame = frame.copy()
+
+            player_dict = tracks["players"][frame_num]
+            referee_dict = tracks["referees"][frame_num]
+            ball_dict = tracks["ball"][frame_num]
+
+            # Draw players
+            for track_id, player in player_dict.items():
+                frame = self.draw_ellipse(frame, player["bbox"], (0, 0, 255), track_id)
+            
+            # Draw referees
+            for track_id, referee in referee_dict.items():
+                frame = self.draw_ellipse(frame, referee["bbox"], (0, 255, 255))
+            
+            # Write the frame directly to disk
+            video_writer.write(frame)
+            
+            if frame_num % 100 == 0:
+                print(f"Processing frame {frame_num}/{len(video_frames)}")
+        
+        return
