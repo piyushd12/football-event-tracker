@@ -28,6 +28,7 @@
 import cv2
 from utils import read_video
 from trackers import Tracker
+from team_assigner import TeamAssigner
 import time
 
 def main():
@@ -43,6 +44,18 @@ def main():
     tracks = tracker.get_object_tracks(video_frames, read_from_stub=True, stub_path=f"stubs/tracks_stub_{video_name}.pkl")
     n2 = time.time()
     print(f"Time to get object tracks: {n2 - n1} seconds")
+
+    # Assign player teams
+    team_assigner = TeamAssigner()
+    team_assigner.assign_team_color(frame=video_frames[0],player_detections=tracks['players'][0])
+
+    for frame_num, player_track in enumerate(tracks['players']):
+        for player_id, track in player_track.items():
+            team_id = team_assigner.get_player_team(frame=video_frames[frame_num],player_bbox=track['bbox'],player_id=player_id)
+
+            tracks['players'][frame_num][player_id]['team_id'] = team_id
+            tracks['players'][frame_num][player_id]['team_color'] = team_assigner.team_colors[team_id]
+
     
     # Setup Output Video Writer
     output_path = f"output_videos/output_video_{video_name}.avi"
