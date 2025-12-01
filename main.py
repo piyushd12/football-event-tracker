@@ -29,6 +29,7 @@ import cv2
 from utils import read_video
 from trackers import Tracker
 from team_assigner import TeamAssigner
+from player_ball_assigner import PlayerBallAssigner
 import time
 
 def main():
@@ -60,6 +61,15 @@ def main():
             tracks['players'][frame_num][player_id]['team_id'] = team_id
             tracks['players'][frame_num][player_id]['team_color'] = team_assigner.team_colors[team_id]
 
+    # Assign player ball possession
+    player_ball_assigner = PlayerBallAssigner()
+    
+    for frame_num, player_track in enumerate(tracks['players']):
+        ball_bbox = tracks['ball'][frame_num][1]['bbox']
+        assigned_player_id = player_ball_assigner.assign_ball_to_player(player_track,ball_bbox)
+
+        if assigned_player_id != -1:
+            tracks['players'][frame_num][assigned_player_id]['has_ball'] = True
     
     # Setup Output Video Writer
     output_path = f"output_videos/output_video_{video_name}.avi"
