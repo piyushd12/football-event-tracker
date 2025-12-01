@@ -172,7 +172,7 @@ class Tracker:
     #     return output_video_frames
 
 
-    def draw_annotations(self, video_frames, tracks, video_writer):
+    def draw_annotations(self, video_frames, tracks, video_writer,team_ball_control):
         # output_video_frames = []
         
         for frame_num, frame in enumerate(video_frames):
@@ -197,6 +197,9 @@ class Tracker:
             for _, ball in ball_dict.items():
                 frame = self.draw_traingle(frame, ball["bbox"], (0, 255, 0))
 
+            # Draw team ball control panel
+            frame = self.draw_team_ball_control_panel(frame,frame_num,team_ball_control)
+
             # Write the frame directly to disk
             video_writer.write(frame)
             
@@ -205,6 +208,55 @@ class Tracker:
         
         return
     
+    def draw_team_ball_control_panel(self,frame,frame_num,team_ball_control):
+        # Draw opaque rectangle
+        overlay = frame.copy()
+        cv2.rectangle(
+            img=overlay,
+            pt1=(1350,850),
+            pt2=(1900,970),
+            color=(255,255,255),
+            thickness=cv2.FILLED
+        )
+        alpha = 0.4
+        cv2.addWeighted(
+            src1=overlay,
+            alpha=alpha,
+            src2=frame,
+            beta=1-alpha,
+            gamma=0,
+            dst=frame
+        )
+
+        team_ball_control_till_frame = team_ball_control[:frame_num+1]
+        # Get the no. of times each team has the ball
+        team_1_num_frames = team_ball_control_till_frame[team_ball_control_till_frame==1].shape[0]
+        team_2_num_frames = team_ball_control_till_frame[team_ball_control_till_frame==2].shape[0]
+        team_1 = team_1_num_frames/(team_1_num_frames+team_2_num_frames)
+        team_2 = team_2_num_frames/(team_1_num_frames+team_2_num_frames)
+
+        cv2.putText(
+            img=frame,
+            text=f"Team 1 ball control: {team_1*100:.2f}%",
+            org=(1400,900),
+            fontFace=cv2.FONT_HERSHEY_COMPLEX,
+            fontScale = 1,
+            color=(0,0,0),
+            thickness=3
+        )
+        cv2.putText(
+            img=frame,
+            text=f"Team 2 ball control: {team_2*100:.2f}%",
+            org=(1400,950),
+            fontFace=cv2.FONT_HERSHEY_COMPLEX,
+            fontScale = 1,
+            color=(0,0,0),
+            thickness=3
+        )
+
+        return frame
+
+
     def interpolate_ball_positions(self,ball_tracks):
         ball_positions = [x.get(1,{}).get("bbox",[]) for x in ball_tracks]
         df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])

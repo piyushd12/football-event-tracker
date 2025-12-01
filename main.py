@@ -31,6 +31,7 @@ from trackers import Tracker
 from team_assigner import TeamAssigner
 from player_ball_assigner import PlayerBallAssigner
 import time
+import numpy as np
 
 def main():
     ini = time.time()
@@ -63,6 +64,7 @@ def main():
 
     # Assign player ball possession
     player_ball_assigner = PlayerBallAssigner()
+    team_ball_control = []
     
     for frame_num, player_track in enumerate(tracks['players']):
         ball_bbox = tracks['ball'][frame_num][1]['bbox']
@@ -70,7 +72,11 @@ def main():
 
         if assigned_player_id != -1:
             tracks['players'][frame_num][assigned_player_id]['has_ball'] = True
-    
+            team_ball_control.append(tracks['players'][frame_num][assigned_player_id]['team_id'])
+        else:
+            team_ball_control.append(team_ball_control[-1])
+    team_ball_control = np.array(team_ball_control)
+
     # Setup Output Video Writer
     output_path = f"output_videos/output_video_{video_name}.avi"
     height, width = video_frames[0].shape[:2]
@@ -78,7 +84,7 @@ def main():
     out = cv2.VideoWriter(output_path, fourcc, 24, (width, height))
 
     # Pass the writer to the function
-    tracker.draw_annotations(video_frames, tracks, out)
+    tracker.draw_annotations(video_frames, tracks, out,team_ball_control)
     n3 = time.time()
     print(f"Time to draw annotations: {n3 - n2} seconds")
     
