@@ -48,6 +48,9 @@ def main():
     n2 = time.time()
     print(f"Time to get object tracks: {n2 - n1} seconds")
 
+    # Get object Positions
+    tracker.add_object_position_to_tracks(tracks)
+
     # Camera Movement Estimation
     camera_movement_estimator = CameraMovementEstimator(video_frames[0])
     camera_movement_per_frame = camera_movement_estimator.get_camera_movement(
@@ -55,6 +58,9 @@ def main():
         read_from_stub=True,
         stub_path=f"stubs/camera_movement_stub_{video_name}.pkl"
     )
+
+    # Adjust object positions according to camera movement
+    camera_movement_estimator.add_adjusted_positions_to_tracks(tracks,camera_movement_per_frame)
 
     # Interpolate Ball Positions
     tracks["ball"] = tracker.interpolate_ball_positions(tracks["ball"])

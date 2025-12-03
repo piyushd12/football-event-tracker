@@ -28,6 +28,16 @@ class CameraMovementEstimator:
         }
 
 
+    def add_adjusted_positions_to_tracks(self,tracks,camera_movement_per_frame):
+        for object,object_tracks in tracks.items():
+            for frame_num,track in enumerate(object_tracks):
+                for track_id,track_info in track.items():
+                    position = track_info['position']
+                    curr_camera_movement = camera_movement_per_frame[frame_num]
+                    adjusted_position = (position[0]-curr_camera_movement[0],position[1]-curr_camera_movement[1])
+                    track_info['adjusted_position'] = adjusted_position
+                
+
     def get_camera_movement(self,frames,read_from_stub=False,stub_path=None):
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
             with open(stub_path,'rb') as f:
@@ -78,11 +88,3 @@ class CameraMovementEstimator:
                 pickle.dump(camera_movement,f)
                 
         return camera_movement
-
-    def draw_camera_movement(self,frames,camera_movement_per_frame):
-        output_frames = []
-        for frame_num, frame in enumerate(frames):
-            frame = frame.copy()
-
-
-            

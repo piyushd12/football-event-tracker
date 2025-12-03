@@ -5,6 +5,7 @@ import os
 import cv2
 import numpy as np
 import pandas as pd
+from utils import get_center_of_bbox, get_bbox_width, get_foot_position
 
 class Tracker:
     def __init__(self,model_path):
@@ -19,6 +20,17 @@ class Tracker:
             detections += batch_detections
         
         return detections
+
+    def add_object_position_to_tracks(self,tracks):
+        for object,object_tracks in tracks.items():
+            for frame_num,track in enumerate(object_tracks):
+                for track_id,track_info in track.items():
+                    bbox = track_info['bbox']
+                    if object == 'ball':
+                        position = get_center_of_bbox(bbox)
+                    else:
+                        position = get_foot_position(bbox)
+                    track_info['position'] = position
 
     def get_object_tracks(self,frames,read_from_stub=False,stub_path=None):
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
@@ -77,6 +89,56 @@ class Tracker:
             with open(stub_path,"wb") as f:
                 pickle.dump(tracks,f)
         return tracks
+
+    def interpolate_ball_positions(self,ball_tracks):
+        ball_positions = [x.get(1,{}).get("bbox",[]) for x in ball_tracks]
+        df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])
+
+        # Interpolate Missing Values
+        df_ball_positions = df_ball_positions.interpolate()
+        df_ball_positions = df_ball_positions.bfill()
+
+        ball_positions = [{1:{"bbox" : x}} for x in df_ball_positions.to_numpy().tolist()]
+        return ball_positions
+
+    def draw_annotations(self, video_frames, tracks, video_writer,team_ball_control,camera_movement_per_frame):
+        # output_video_frames = []
+        
+        for frame_num, frame in enumerate(video_frames):
+            frame = frame.copy()
+
+            player_dict = tracks["players"][frame_num]
+            referee_dict = tracks["referees"][frame_num]
+            ball_dict = tracks["ball"][frame_num]
+
+            # Draw players
+            for track_id, player in player_dict.items():
+                color = player.get('team_color',(0,0,255))
+                frame = self.draw_ellipse(frame, player["bbox"], color, track_id)
+                if player.get('has_ball',False):
+                    frame = self.draw_traingle(frame,player['bbox'],(0,0,255))
+            
+            # Draw referees
+            for track_id, referee in referee_dict.items():
+                frame = self.draw_ellipse(frame, referee["bbox"], (0, 255, 255))
+
+            # Draw ball
+            for _, ball in ball_dict.items():
+                frame = self.draw_traingle(frame, ball["bbox"], (0, 255, 0))
+
+            # Draw team ball control panel
+            frame = self.draw_team_ball_control_panel(frame,frame_num,team_ball_control)
+
+            # Draw camera movement
+            frame = self.draw_camera_movement(frame,camera_movement_per_frame,frame_num)
+
+            # Write the frame directly to disk
+            video_writer.write(frame)
+            
+            if frame_num % 100 == 0:
+                print(f"Processing frame {frame_num}/{len(video_frames)}")
+        
+        return
 
     def draw_ellipse(self,frame,bbox,color,track_id=None):
         x1,y1,x2,y2 = int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])
@@ -153,8 +215,6 @@ class Tracker:
         )  
         return frame
         
-    
-    
     # def draw_annotations(self,video_frames,tracks):
     #     output_video_frames = []
     #     for frame_num, frame in enumerate(video_frames):
@@ -171,46 +231,6 @@ class Tracker:
     #         output_video_frames.append(frame)
     #     return output_video_frames
 
-
-    def draw_annotations(self, video_frames, tracks, video_writer,team_ball_control,camera_movement_per_frame):
-        # output_video_frames = []
-        
-        for frame_num, frame in enumerate(video_frames):
-            frame = frame.copy()
-
-            player_dict = tracks["players"][frame_num]
-            referee_dict = tracks["referees"][frame_num]
-            ball_dict = tracks["ball"][frame_num]
-
-            # Draw players
-            for track_id, player in player_dict.items():
-                color = player.get('team_color',(0,0,255))
-                frame = self.draw_ellipse(frame, player["bbox"], color, track_id)
-                if player.get('has_ball',False):
-                    frame = self.draw_traingle(frame,player['bbox'],(0,0,255))
-            
-            # Draw referees
-            for track_id, referee in referee_dict.items():
-                frame = self.draw_ellipse(frame, referee["bbox"], (0, 255, 255))
-
-            # Draw ball
-            for _, ball in ball_dict.items():
-                frame = self.draw_traingle(frame, ball["bbox"], (0, 255, 0))
-
-            # Draw team ball control panel
-            frame = self.draw_team_ball_control_panel(frame,frame_num,team_ball_control)
-
-            # Draw camera movement
-            frame = self.draw_camera_movement(frame,camera_movement_per_frame,frame_num)
-
-            # Write the frame directly to disk
-            video_writer.write(frame)
-            
-            if frame_num % 100 == 0:
-                print(f"Processing frame {frame_num}/{len(video_frames)}")
-        
-        return
-    
     def draw_team_ball_control_panel(self,frame,frame_num,team_ball_control):
         # Draw opaque rectangle
         overlay = frame.copy()
@@ -258,17 +278,6 @@ class Tracker:
         )
 
         return frame
-
-    def interpolate_ball_positions(self,ball_tracks):
-        ball_positions = [x.get(1,{}).get("bbox",[]) for x in ball_tracks]
-        df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])
-
-        # Interpolate Missing Values
-        df_ball_positions = df_ball_positions.interpolate()
-        # df_ball_positions = df_ball_positions.bfill()
-
-        ball_positions = [{1:{"bbox" : x}} for x in df_ball_positions.to_numpy().tolist()]
-        return ball_positions
 
     def draw_camera_movement(self,frame,camera_movement_per_frame,frame_num):
         overlay = frame.copy()
