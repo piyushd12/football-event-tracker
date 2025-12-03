@@ -30,6 +30,7 @@ from utils import read_video
 from trackers import Tracker
 from team_assigner import TeamAssigner
 from player_ball_assigner import PlayerBallAssigner
+from camera_movement_estimator import CameraMovementEstimator   
 import time
 import numpy as np
 
@@ -47,9 +48,16 @@ def main():
     n2 = time.time()
     print(f"Time to get object tracks: {n2 - n1} seconds")
 
+    # Camera Movement Estimation
+    camera_movement_estimator = CameraMovementEstimator(video_frames[0])
+    camera_movement_per_frame = camera_movement_estimator.get_camera_movement(
+        frames=video_frames,
+        read_from_stub=True,
+        stub_path=f"stubs/camera_movement_stub_{video_name}.pkl"
+    )
+
     # Interpolate Ball Positions
     tracks["ball"] = tracker.interpolate_ball_positions(tracks["ball"])
-
 
     # Assign player teams
     team_assigner = TeamAssigner()
@@ -84,7 +92,7 @@ def main():
     out = cv2.VideoWriter(output_path, fourcc, 24, (width, height))
 
     # Pass the writer to the function
-    tracker.draw_annotations(video_frames, tracks, out,team_ball_control)
+    tracker.draw_annotations(video_frames, tracks, out,team_ball_control,camera_movement_per_frame)
     n3 = time.time()
     print(f"Time to draw annotations: {n3 - n2} seconds")
     

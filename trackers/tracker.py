@@ -172,7 +172,7 @@ class Tracker:
     #     return output_video_frames
 
 
-    def draw_annotations(self, video_frames, tracks, video_writer,team_ball_control):
+    def draw_annotations(self, video_frames, tracks, video_writer,team_ball_control,camera_movement_per_frame):
         # output_video_frames = []
         
         for frame_num, frame in enumerate(video_frames):
@@ -200,6 +200,9 @@ class Tracker:
             # Draw team ball control panel
             frame = self.draw_team_ball_control_panel(frame,frame_num,team_ball_control)
 
+            # Draw camera movement
+            frame = self.draw_camera_movement(frame,camera_movement_per_frame,frame_num)
+
             # Write the frame directly to disk
             video_writer.write(frame)
             
@@ -216,7 +219,7 @@ class Tracker:
             pt1=(1350,850),
             pt2=(1900,970),
             color=(255,255,255),
-            thickness=cv2.FILLED
+            thickness=-1
         )
         alpha = 0.4
         cv2.addWeighted(
@@ -256,7 +259,6 @@ class Tracker:
 
         return frame
 
-
     def interpolate_ball_positions(self,ball_tracks):
         ball_positions = [x.get(1,{}).get("bbox",[]) for x in ball_tracks]
         df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])
@@ -267,3 +269,42 @@ class Tracker:
 
         ball_positions = [{1:{"bbox" : x}} for x in df_ball_positions.to_numpy().tolist()]
         return ball_positions
+
+    def draw_camera_movement(self,frame,camera_movement_per_frame,frame_num):
+        overlay = frame.copy()
+        cv2.rectangle(
+            img=overlay,
+            pt1=(0,0),
+            pt2=(500,100),
+            color=(255,255,255),
+            thickness=-1
+        )
+        alpha = 0.6
+        cv2.addWeighted(
+            src1=overlay,
+            alpha=alpha,
+            src2=frame,
+            beta=1-alpha,
+            gamma=0,
+            dst=frame
+        )
+        x_movement,y_movement = camera_movement_per_frame[frame_num]
+        cv2.putText(
+            img=frame,
+            text=f"Camera X Movement: {x_movement:.2f}",
+            org=(10,30),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1,
+            color=(0,0,0),
+            thickness=3
+        )
+        cv2.putText(
+            img=frame,
+            text=f"Camera Y Movement: {y_movement:.2f}",
+            org=(10,60),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=1,
+            color=(0,0,0),
+            thickness=3
+        )        
+        return frame
